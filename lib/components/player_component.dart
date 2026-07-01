@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'court_component.dart';
 import 'ball_component.dart';
 import '../game/game_state.dart';
+import '../game/spike_zone_game.dart';
 import '../systems/synergy_system.dart';
 
 enum PlayerRole { setter, spiker, blocker }
@@ -31,7 +32,7 @@ class RoleStats {
 /// -----------------------------------------------------------------------
 /// PLAYER COMPONENT (touches on requests #3, #6, #7)
 /// -----------------------------------------------------------------------
-class PlayerComponent extends PositionComponent with HasGameReference {
+class PlayerComponent extends PositionComponent with HasGameReference<SpikeZoneGame> {
   PlayerComponent({
     required this.playerId,
     required this.role,

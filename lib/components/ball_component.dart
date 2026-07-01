@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'court_component.dart';
 import 'player_component.dart';
 import '../game/game_state.dart';
+import '../game/spike_zone_game.dart';
 import '../camera/camera_config.dart';
 
 /// -----------------------------------------------------------------------
@@ -27,7 +28,7 @@ import '../camera/camera_config.dart';
 /// "realistic" but chaotic ones.
 /// -----------------------------------------------------------------------
 class BallComponent extends CircleComponent
-    with CollisionCallbacks, HasGameReference {
+    with CollisionCallbacks, HasGameReference<SpikeZoneGame> {
   BallComponent({required this.court}) : super(radius: 14, anchor: Anchor.center);
 
   final CourtComponent court;
@@ -43,6 +44,7 @@ class BallComponent extends CircleComponent
 
   @override
   Future<void> onLoad() async {
+    await super.onLoad();
     paint = Paint()..color = Colors.white;
     add(CircleHitbox()..collisionType = CollisionType.active);
   }

@@ -1,5 +1,6 @@
 import 'package:flame/game.dart';
 import 'package:flame/camera.dart';
+import 'package:flame/components.dart';
 
 /// -----------------------------------------------------------------------
 /// CAMERA / VIEWPORT CONFIG  (answers request #5)

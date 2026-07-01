@@ -2,7 +2,6 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flame/components.dart';
-import 'package:flame/particles.dart';
 import 'package:flutter/material.dart';
 
 /// -----------------------------------------------------------------------
@@ -39,7 +38,7 @@ class FinishSpikeBurst extends Component {
   FinishSpikeBurst({
     required this.origin,
     required this.color,
-    this.particleCount = 180,
+    int particleCount = 180,
     this.lifetimeSeconds = 0.45,
     this.atlasImage,
   }) : particleCount = min(particleCount, _hardCap);
