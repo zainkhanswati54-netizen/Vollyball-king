@@ -81,7 +81,7 @@ class JuiceEffects {
 
     final overlay = RectangleComponent(
       size: game.size,
-      paint: Paint()..color = const Color(0xFF6E3DF2).withOpacity(0.0),
+      paint: Paint()..color = const Color(0xFF6E3DF2).withValues(alpha: 0.0),
       priority: 1000, // render above gameplay, below UI overlays if any
     );
     game.camera.viewport.add(overlay);

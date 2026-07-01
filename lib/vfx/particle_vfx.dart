@@ -109,7 +109,7 @@ class FinishSpikeBurst extends Component {
 
       transforms.add(ui.RSTransform(scale, 0, _positions[i * 2], _positions[i * 2 + 1]));
       rects.add(srcRect);
-      colors.add(color.withOpacity(alpha.clamp(0.0, 1.0)));
+      colors.add(color.withValues(alpha: alpha.clamp(0.0, 1.0)));
     }
 
     final paint = Paint()..blendMode = BlendMode.screen;
@@ -125,7 +125,7 @@ class FinishSpikeBurst extends Component {
       ..blendMode = BlendMode.screen;
     for (var i = 0; i < particleCount; i++) {
       final t = (_ages[i] / lifetimeSeconds).clamp(0.0, 1.0);
-      paint.color = color.withOpacity((1 - t).clamp(0.0, 1.0));
+      paint.color = color.withValues(alpha: (1 - t).clamp(0.0, 1.0));
       canvas.drawCircle(
         Offset(_positions[i * 2], _positions[i * 2 + 1]),
         3.0 * (1 - t) + 1.0,

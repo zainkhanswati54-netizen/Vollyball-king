@@ -49,7 +49,7 @@ class CourtComponent extends PositionComponent {
     canvas.drawRect(Rect.fromLTWH(0, floorY, kDesignWidth, 80), floorPaint);
 
     // Net
-    final netPaint = Paint()..color = const Color(0xFFE8E8E8).withOpacity(0.85);
+    final netPaint = Paint()..color = const Color(0xFFE8E8E8).withValues(alpha: 0.85);
     canvas.drawRect(
       Rect.fromLTWH(kDesignWidth / 2 - netThickness / 2, floorY - netHeight, netThickness, netHeight),
       netPaint,
@@ -57,7 +57,7 @@ class CourtComponent extends PositionComponent {
 
     // Center line marker
     final linePaint = Paint()
-      ..color = Colors.white.withOpacity(0.3)
+      ..color = Colors.white.withValues(alpha: 0.3)
       ..strokeWidth = 2;
     canvas.drawLine(
       Offset(kDesignWidth / 2, floorY),
