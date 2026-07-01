@@ -12,17 +12,26 @@ first run are noted at the bottom.
 
 ## Setup
 
+**Running locally** (requires the Flutter SDK installed):
 ```bash
-flutter create --org com.example spike_zone_host   # or use this folder directly
-cd spike_zone
+flutter create . --platforms=web,android   # generates platform folders this repo doesn't include
 flutter pub get
 flutter run
 ```
 
-If starting from this folder directly, you'll additionally need standard
-Flutter platform folders (`android/`, `ios/`, etc.) — generate them with
-`flutter create .` from inside this directory once `pubspec.yaml` is in
-place.
+**Running via GitHub Actions / CI** — no local Flutter install needed.
+The workflow at `.github/workflows/build.yml` runs `flutter create . --platforms=web`
+(or `--platforms=android`) itself, on every run, before building — so the
+platform folders (`web/`, `android/`) are generated fresh in CI rather than
+committed to the repo. This is deliberate: it keeps the repo to just the
+game's source code, and avoids committing large, mostly-boilerplate platform
+scaffolding that regenerates identically every time anyway.
+
+If you ever want the platform folders committed to the repo instead (e.g.
+to customize native Android/iOS config, add an app icon, etc.), run
+`flutter create . --platforms=web,android` locally once, remove the
+`Generate missing ... platform files` steps from the workflow, and commit
+the generated folders.
 
 ## File map (design doc → code)
 

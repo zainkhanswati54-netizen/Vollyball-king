@@ -30,6 +30,9 @@ jobs:
           channel: 'stable'
 
       - run: flutter pub get
+      - name: Generate missing web platform files
+        run: flutter create . --platforms=web
+      - run: flutter pub get
       - run: flutter build web --release --base-href /spike-zone/  # match your repo name
 
       - name: Upload web build artifact
@@ -66,6 +69,9 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
+      - run: flutter pub get
+      - name: Generate missing Android platform files
+        run: flutter create . --platforms=android
       - run: flutter pub get
       - run: flutter build apk --release
 
