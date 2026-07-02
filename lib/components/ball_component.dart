@@ -8,6 +8,7 @@ import 'player_component.dart';
 import '../game/game_state.dart';
 import '../game/spike_zone_game.dart';
 import '../camera/camera_config.dart';
+import '../systems/collision_resolution_system.dart';
 
 /// -----------------------------------------------------------------------
 /// BALL COMPONENT  (answers request #3)
@@ -120,18 +121,14 @@ class BallComponent extends CircleComponent
     return rotated..scale(speed);
   }
 
-  /// Called by PlayerComponent when a touch (dig/set/attack) connects.
-  void receiveHit({
-    required PlayerComponent hitter,
-    required Vector2 aimDirection,
-    double chargeFraction = 0.0,
-  }) {
-    velocity.setFrom(computeHitVelocity(
-      aimDirection: aimDirection,
-      power: hitter.stats.power,
-      accuracy: hitter.stats.accuracy,
-      chargeFraction: chargeFraction,
-    ));
+  /// Called ONLY by `CollisionResolver` once it has decided the outcome of
+  /// a ball/player contact. BallComponent itself no longer computes hit
+  /// velocity — that logic now lives in CollisionResolver so timing
+  /// quality and the spike-legality check can be factored in before the
+  /// velocity formula runs. This method's job is just to apply the result
+  /// and update bookkeeping (last toucher, in-play flag, touch count).
+  void applyResolvedHit({required Vector2 velocity, required PlayerComponent hitter}) {
+    this.velocity.setFrom(velocity);
     lastToucherId = hitter.playerId;
     lastToucherSide = hitter.side;
     _inPlay = true;
@@ -150,10 +147,10 @@ class BallComponent extends CircleComponent
       velocity.x = 0;
       velocity.y = velocity.y.abs() * 0.2;
     } else if (other is PlayerHitbox) {
-      // Actual hit resolution is driven by PlayerComponent calling
-      // receiveHit() directly on input, not by passive collision, so
-      // that touch timing feels player-controlled rather than automatic.
-      // This callback just clamps the ball so it doesn't tunnel through.
+      // Real contact — hand off to the collision resolution system, which
+      // reads the player's ActionState/timing and the team's touch count
+      // to decide the outcome. See collision_resolution_system.dart.
+      CollisionResolver.resolve(ball: this, player: other.owner, game: game);
     }
   }
 

@@ -6,6 +6,7 @@ import 'ball_component.dart';
 import '../game/game_state.dart';
 import '../game/spike_zone_game.dart';
 import '../systems/synergy_system.dart';
+import '../systems/action_state.dart';
 
 enum PlayerRole { setter, spiker, blocker }
 
@@ -32,7 +33,8 @@ class RoleStats {
 /// -----------------------------------------------------------------------
 /// PLAYER COMPONENT (touches on requests #3, #6, #7)
 /// -----------------------------------------------------------------------
-class PlayerComponent extends PositionComponent with HasGameReference<SpikeZoneGame> {
+class PlayerComponent extends PositionComponent
+    with HasGameReference<SpikeZoneGame>, HasActionState {
   PlayerComponent({
     required this.playerId,
     required this.role,
@@ -87,36 +89,16 @@ class PlayerComponent extends PositionComponent with HasGameReference<SpikeZoneG
   }
 
   // --- Actions -----------------------------------------------------
+  // These methods now express INTENT ONLY — they set the player's
+  // ActionState and let CollisionResolver decide the actual outcome the
+  // moment the ball physically contacts this player's hitbox. This is
+  // what makes the collision system (not the input/AI layer) the single
+  // source of truth for hit resolution.
 
-  void performDig(BallComponent ball, Vector2 aimDirection) {
-    ball.receiveHit(hitter: this, aimDirection: aimDirection);
-    _accrueTension(0.08);
-  }
-
-  void performSet(BallComponent ball, Vector2 aimDirection) {
-    // Setter's "Dime Set" — Accuracy stat already narrows deviation via
-    // BallComponent.computeHitVelocity, no extra logic needed here beyond
-    // giving the player an explicit aim vector instead of nearest-teammate
-    // auto-targeting.
-    ball.receiveHit(hitter: this, aimDirection: aimDirection);
-    _accrueTension(0.10);
-  }
-
-  void performAttack(BallComponent ball, Vector2 aimDirection) {
-    ball.receiveHit(hitter: this, aimDirection: aimDirection, chargeFraction: chargeFraction);
-    if (chargeFraction >= 1.0) {
-      _accrueTension(0.6); // large gain, per GDD 5.2
-    } else {
-      _accrueTension(0.15);
-    }
-    chargeFraction = 0.0;
-    isCharging = false;
-  }
-
-  void performBlock(BallComponent ball, Vector2 aimDirection) {
-    ball.receiveHit(hitter: this, aimDirection: aimDirection);
-    _accrueTension(0.25); // blocks feed tension too — defense is rewarded
-  }
+  void beginDig() => startAction(ActionState.digging);
+  void beginSet() => startAction(ActionState.setting);
+  void beginAttack() => startAction(ActionState.spiking);
+  void beginBlock() => startAction(ActionState.blocking);
 
   void startCharging() => isCharging = true;
 
@@ -125,11 +107,25 @@ class PlayerComponent extends PositionComponent with HasGameReference<SpikeZoneG
     chargeFraction = (chargeFraction + dt / 0.9).clamp(0.0, 1.0); // ~0.9s to full charge
   }
 
-  void _accrueTension(double amount) {
+  @override
+  void update(double dt) {
+    super.update(dt);
+    updateActionTimer(dt);
+    updateCharge(dt);
+  }
+
+  /// Called by CollisionResolver once a touch is resolved — public so the
+  /// resolver (a separate system, by design) can drive tension without
+  /// PlayerComponent needing to know resolver internals.
+  void addTension(double amount) {
     localTensionContribution += amount;
     if (localTensionContribution >= 1.0) {
       localTensionContribution = 0;
       game.triggerAwakening();
+      if (role == PlayerRole.spiker) {
+        chargeFraction = 0.0;
+        isCharging = false;
+      }
     }
   }
 

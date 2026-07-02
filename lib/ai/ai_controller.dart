@@ -5,6 +5,7 @@ import '../components/ball_component.dart';
 import '../components/player_component.dart';
 import '../game/game_state.dart';
 import '../game/spike_zone_game.dart';
+import '../systems/action_state.dart';
 
 /// -----------------------------------------------------------------------
 /// AI CONTROLLER  (answers request #6)
@@ -120,27 +121,30 @@ class AIController {
   }
 
   void _considerAttack() {
-    // Simplified decision: whichever teammate is within hit-range of the
-    // ball and matches the next legal touch attempts the appropriate
-    // action. Real implementation would branch on game.touch.touchCount
-    // to decide dig vs set vs attack, mirroring the human input flow.
+    // The AI's job now is only to declare INTENT when it's about to be in
+    // hitting range — actual resolution happens automatically the moment
+    // Flame's collision system detects real hitbox overlap between the
+    // ball and this player, via CollisionResolver (see
+    // collision_resolution_system.dart). This mirrors exactly how a human
+    // player's input would work: press the action button, then the
+    // collision either does or doesn't land depending on timing.
     final ballX = ball.position.x;
     for (final p in team) {
-      final inRange = (p.position.x - ballX).abs() < 60 &&
-          (p.position.y - ball.position.y).abs() < 140;
-      if (!inRange) continue;
+      final approaching = (p.position.x - ballX).abs() < 90 &&
+          (p.position.y - ball.position.y).abs() < 160;
+      if (!approaching) continue;
       if (p.playerId == ball.lastToucherId) continue;
+      if (p.currentAction != ActionState.idle) continue; // already committed to an action
 
-      final aim = Vector2(p.side == TeamSide.home ? 1 : -1, -0.6);
       switch (game.touch.touchCount) {
         case 0:
-          p.performDig(ball, aim);
+          p.beginDig();
           break;
         case 1:
-          p.performSet(ball, aim);
+          p.beginSet();
           break;
         case 2:
-          p.performAttack(ball, aim);
+          p.beginAttack();
           break;
       }
       break;
