@@ -64,17 +64,114 @@ class PlayerComponent extends PositionComponent
     hitbox = PlayerHitbox(owner: this, size: size);
     await add(hitbox);
 
+    // Default facing: toward the net, so both teams start the rally
+    // looking at each other instead of both defaulting to "facing right."
+    facingRight = side == TeamSide.home;
+    _lastX = position.x;
+
     // Apply Active Synergy Traits once the full team is assembled.
     // (Team is passed in via buildTeam below, then resolved together.)
   }
 
+  /// Tracks movement direction so the sprite flips to face the way it's
+  /// moving — a static default of "facing right" until the first move.
+  bool facingRight = true;
+  double _lastX = 0;
+
   @override
   void render(Canvas canvas) {
-    final paint = Paint()..color = _roleColor();
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, size.x, size.y), const Radius.circular(8)),
-      paint,
+    canvas.save();
+
+    // Flip horizontally around the component's own center when facing left.
+    // This must happen before any drawing so every shape below flips with it.
+    if (!facingRight) {
+      canvas.translate(size.x, 0);
+      canvas.scale(-1, 1);
+    }
+
+    _drawCharacter(canvas);
+
+    canvas.restore();
+  }
+
+  void _drawCharacter(Canvas canvas) {
+    final bodyColor = _roleColor();
+    final outline = Paint()
+      ..color = Colors.black.withValues(alpha: 0.55)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.5;
+    final fill = Paint()..color = bodyColor;
+    final shade = Paint()..color = bodyColor.withValues(alpha: 0.65);
+
+    final w = size.x;
+    final h = size.y;
+
+    // Proportions (arcade-sprite style: slightly oversized head, compact
+    // torso, simple limb shapes) — tuned for a 48x96 bounding box but
+    // expressed as fractions so it scales if `size` ever changes.
+    final headRadius = w * 0.26;
+    final headCenter = Offset(w / 2, headRadius + 2);
+
+    final torsoTop = headRadius * 2 + 2;
+    final torsoHeight = h * 0.42;
+    final torsoRect = Rect.fromLTWH(w * 0.22, torsoTop, w * 0.56, torsoHeight);
+    final torsoRRect = RRect.fromRectAndRadius(torsoRect, Radius.circular(w * 0.14));
+
+    final legTop = torsoTop + torsoHeight - 2;
+    final legHeight = h - legTop - 2;
+    final legWidth = w * 0.20;
+
+    // Back leg (drawn first so the front leg overlaps it slightly — cheap
+    // depth cue without real 3D).
+    final backLeg = RRect.fromRectAndRadius(
+      Rect.fromLTWH(w * 0.52, legTop, legWidth, legHeight),
+      Radius.circular(legWidth * 0.4),
     );
+    canvas.drawRRect(backLeg, shade);
+    canvas.drawRRect(backLeg, outline);
+
+    // Back arm — angled backward to suggest forward motion/reach.
+    final backArmPath = Path()
+      ..moveTo(w * 0.30, torsoTop + 6)
+      ..lineTo(w * 0.06, torsoTop + torsoHeight * 0.55)
+      ..lineTo(w * 0.14, torsoTop + torsoHeight * 0.7)
+      ..lineTo(w * 0.34, torsoTop + 18)
+      ..close();
+    canvas.drawPath(backArmPath, shade);
+    canvas.drawPath(backArmPath, outline);
+
+    // Torso
+    canvas.drawRRect(torsoRRect, fill);
+    canvas.drawRRect(torsoRRect, outline);
+
+    // Front leg
+    final frontLeg = RRect.fromRectAndRadius(
+      Rect.fromLTWH(w * 0.28, legTop, legWidth, legHeight),
+      Radius.circular(legWidth * 0.4),
+    );
+    canvas.drawRRect(frontLeg, fill);
+    canvas.drawRRect(frontLeg, outline);
+
+    // Front arm — reaches slightly forward/up, reads well for a "ready
+    // position" stance regardless of which action the player is in.
+    final frontArmPath = Path()
+      ..moveTo(w * 0.68, torsoTop + 6)
+      ..lineTo(w * 0.92, torsoTop + torsoHeight * 0.35)
+      ..lineTo(w * 0.84, torsoTop + torsoHeight * 0.5)
+      ..lineTo(w * 0.66, torsoTop + 18)
+      ..close();
+    canvas.drawPath(frontArmPath, fill);
+    canvas.drawPath(frontArmPath, outline);
+
+    // Head
+    canvas.drawCircle(headCenter, headRadius, fill);
+    canvas.drawCircle(headCenter, headRadius, outline);
+
+    // A simple role-marker chevron on the chest so the three roles stay
+    // readable even before real jersey art exists.
+    final markerPaint = Paint()..color = Colors.white.withValues(alpha: 0.85);
+    final markerCenter = Offset(w / 2, torsoTop + torsoHeight * 0.4);
+    canvas.drawCircle(markerCenter, w * 0.06, markerPaint);
   }
 
   Color _roleColor() {
@@ -112,6 +209,15 @@ class PlayerComponent extends PositionComponent
     super.update(dt);
     updateActionTimer(dt);
     updateCharge(dt);
+
+    // Direction tracking for the sprite flip — only update facing when
+    // there's meaningful horizontal movement, so standing still (e.g.
+    // mid-action) doesn't cause flicker from tiny sub-pixel drift.
+    final dx = position.x - _lastX;
+    if (dx.abs() > 0.5) {
+      facingRight = dx > 0;
+    }
+    _lastX = position.x;
   }
 
   /// Called by CollisionResolver once a touch is resolved — public so the

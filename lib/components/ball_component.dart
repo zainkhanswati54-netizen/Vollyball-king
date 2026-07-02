@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 import 'package:flame/components.dart';
 import 'package:flame/collisions.dart';
 import 'package:flutter/material.dart';
@@ -41,12 +42,16 @@ class BallComponent extends CircleComponent
   int? lastToucherId;
   TeamSide? lastToucherSide;
 
+  /// Visual spin — driven by horizontal velocity so the ball visibly
+  /// rotates faster on harder-hit shots and settles when parked for a
+  /// serve. Purely cosmetic; doesn't feed back into physics.
+  double rotationAngle = 0;
+
   bool _inPlay = false;
 
   @override
   Future<void> onLoad() async {
     await super.onLoad();
-    paint = Paint()..color = Colors.white;
     add(CircleHitbox()..collisionType = CollisionType.active);
   }
 
@@ -61,7 +66,70 @@ class BallComponent extends CircleComponent
     }
     position += velocity * dt;
 
+    // Spin rate proportional to horizontal speed, like a ball rolling
+    // through the air — scaled by radius so it doesn't spin unrealistically
+    // fast at high speed. Kept within -2pi..2pi to avoid float growth over
+    // a long-running match.
+    final angularVelocity = velocity.x / (radius * 2);
+    rotationAngle = (rotationAngle + angularVelocity * dt) % (2 * pi);
+
     _checkOutOfBounds();
+  }
+
+  // -------------------------------------------------------------------
+  // VISUALS — proper volleyball panel pattern instead of a plain circle,
+  // rotating live based on `rotationAngle` (driven by horizontal speed).
+  // -------------------------------------------------------------------
+  @override
+  void render(Canvas canvas) {
+    final center = Offset(radius, radius);
+
+    // Sphere shading: a soft radial gradient with the highlight offset
+    // up-left, which is what sells "round object" more than a flat fill.
+    final sphereGradient = ui.Gradient.radial(
+      center - Offset(radius * 0.35, radius * 0.35),
+      radius * 1.4,
+      const [Colors.white, Color(0xFFDADADA)],
+      const [0.0, 1.0],
+    );
+    canvas.drawCircle(center, radius, Paint()..shader = sphereGradient);
+
+    // Rotating seam pattern — three curved panel seams spaced 120° apart,
+    // all rotated together by `rotationAngle` so the ball visibly spins
+    // in the direction and speed it's actually traveling.
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(rotationAngle);
+    canvas.translate(-center.dx, -center.dy);
+
+    final seamPaint = Paint()
+      ..color = const Color(0xFF3A3A3A).withValues(alpha: 0.75)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6;
+
+    for (var i = 0; i < 3; i++) {
+      final angle = i * (pi * 2 / 3);
+      final p1 = center + Offset(cos(angle), sin(angle)) * radius;
+      final p2 = center + Offset(cos(angle + pi), sin(angle + pi)) * radius;
+      final control = center + Offset(cos(angle + pi / 2), sin(angle + pi / 2)) * radius * 0.55;
+
+      final seamPath = Path()
+        ..moveTo(p1.dx, p1.dy)
+        ..quadraticBezierTo(control.dx, control.dy, p2.dx, p2.dy);
+      canvas.drawPath(seamPath, seamPaint);
+    }
+    canvas.restore();
+
+    // Crisp outline so the ball reads clearly against both the sky and
+    // the wood floor background.
+    canvas.drawCircle(
+      center,
+      radius,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = const Color(0xFF999999),
+    );
   }
 
   void resetForServe(TeamSide server) {
