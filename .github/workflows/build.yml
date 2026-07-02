@@ -33,7 +33,7 @@ jobs:
       - name: Generate missing web platform files
         run: flutter create . --platforms=web
       - run: flutter pub get
-      - run: flutter build web --release --base-href /spike-zone/  # match your repo name
+      - run: flutter build web --release --base-href /Vollyball-king/
 
       - name: Upload web build artifact
         uses: actions/upload-pages-artifact@v3
