@@ -70,7 +70,7 @@ class PlayerComponent extends PositionComponent with HasGameReference<SpikeZoneG
   void render(Canvas canvas) {
     final paint = Paint()..color = _roleColor();
     canvas.drawRRect(
-      RRect.fromRectAndRadius(Rect.fromLTWH(0, -size.y, size.x, size.y), const Radius.circular(8)),
+      RRect.fromRectAndRadius(Rect.fromLTWH(0, 0, size.x, size.y), const Radius.circular(8)),
       paint,
     );
   }
