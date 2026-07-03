@@ -35,8 +35,9 @@ class BallComponent extends CircleComponent
 
   final CourtComponent court;
 
-  static const double gravity = 980.0; // px/s^2, tuned for a ~0.9s apex-to-apex arc
-  static const double maxSpeed = 1400.0;
+  static const double gravity = 760.0; // lowered from 980 — floatier arc, more time to react/position
+  static const double airDrag = 0.22; // per-second horizontal velocity decay — arcade "bounciness"
+  static const double maxSpeed = 1300.0;
 
   final Vector2 velocity = Vector2.zero();
   int? lastToucherId;
@@ -61,6 +62,15 @@ class BallComponent extends CircleComponent
     if (!_inPlay) return;
 
     velocity.y += gravity * dt;
+
+    // Horizontal drag: the ball loses a fraction of its sideways speed
+    // every second, rather than carrying it unchanged the whole flight.
+    // Combined with the lower gravity above, this is what gives the arc
+    // its "floaty, arcade" read instead of a stiff physical parabola —
+    // and, practically, it buys the receiving team extra reaction time
+    // since the ball drifts rather than rocketing straight to a fixed spot.
+    velocity.x *= (1 - airDrag * dt).clamp(0.0, 1.0);
+
     if (velocity.length > maxSpeed) {
       velocity.scaleTo(maxSpeed);
     }

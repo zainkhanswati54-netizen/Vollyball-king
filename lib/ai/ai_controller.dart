@@ -47,8 +47,11 @@ class AIController {
     _reactionTimer -= dt;
     if (_reactionTimer <= 0) {
       _predictedLanding = predictLandingSpot(ball);
-      // Reaction delay: 0.05s (sharp) .. 0.45s (sluggish), inverse to intelligence.
-      _reactionTimer = 0.45 - (0.40 * intelligence) + _rand.nextDouble() * 0.05;
+      // Reaction delay: 0.04s (sharp) .. 0.34s (sluggish), inverse to
+      // intelligence — tightened from the original range so even a
+      // low-intelligence AI still visibly reacts to the ball crossing the
+      // net instead of reading as "asleep."
+      _reactionTimer = 0.34 - (0.30 * intelligence) + _rand.nextDouble() * 0.05;
     }
 
     if (_predictedLanding == null) return;
@@ -58,7 +61,12 @@ class AIController {
 
   /// Solves y(t) = y0 + vy0*t + 0.5*g*t^2 for the time t at which the ball
   /// crosses the floor plane, then projects x(t) = x0 + vx0*t.
-  /// This is exact for our constant-gravity projectile model.
+  /// This was exact back when horizontal velocity was constant through
+  /// flight; BallComponent now applies air drag to velocity.x (see
+  /// "Rally Physics" tuning), so this x-projection is now a slight
+  /// over-estimate on longer flights. That's fine here — it folds into
+  /// the AI's existing intentional error margin below rather than needing
+  /// a separate drag-aware closed-form solution.
   Vector2 predictLandingSpot(BallComponent b) {
     const g = BallComponent.gravity;
     final x0 = b.position.x;
@@ -128,10 +136,15 @@ class AIController {
     // collision_resolution_system.dart). This mirrors exactly how a human
     // player's input would work: press the action button, then the
     // collision either does or doesn't land depending on timing.
+    //
+    // The proximity window here is intentionally generous vertically
+    // (260px) to match PlayerComponent's extended reach hitbox — a ball
+    // crossing the net at head height or higher is well within a
+    // realistic jump/reach zone, not just balls that have nearly landed.
     final ballX = ball.position.x;
     for (final p in team) {
-      final approaching = (p.position.x - ballX).abs() < 90 &&
-          (p.position.y - ball.position.y).abs() < 160;
+      final approaching = (p.position.x - ballX).abs() < 130 &&
+          (p.position.y - ball.position.y).abs() < 260;
       if (!approaching) continue;
       if (p.playerId == ball.lastToucherId) continue;
       if (p.currentAction != ActionState.idle) continue; // already committed to an action

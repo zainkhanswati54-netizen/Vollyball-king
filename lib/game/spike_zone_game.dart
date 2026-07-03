@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'dart:ui';
 import 'package:flame/game.dart';
 import 'package:flame/events.dart';
@@ -16,6 +15,7 @@ import '../juice/juice_effects.dart';
 import '../camera/camera_config.dart';
 import '../persistence/persistence_service.dart';
 import '../ui/hud_data.dart';
+import '../systems/action_state.dart';
 
 /// -----------------------------------------------------------------------
 /// MAIN GAME CLASS  (answers request #2)
@@ -146,29 +146,35 @@ class SpikeZoneGame extends FlameGame
   void _handleMoveOrDive() {
     final player = _nextEligibleHumanPlayer();
     if (player == null) return;
+    if (player.currentAction != ActionState.idle) return; // already committed — avoid spam-retriggering
 
-    // Move: step toward the ball's current horizontal position.
-    final dx = ball.position.x - player.position.x;
-    final step = dx.sign * min(dx.abs(), 90.0);
-    player.position.x += step;
+    // Move toward the ball's "shadow" — in this side-view game that's
+    // simply the ball's current x position, since there's no separate
+    // depth axis to project through. Movement itself is now smooth and
+    // multi-frame (see PlayerComponent._updateMovement) rather than an
+    // instant per-tap snap, which is what made it read as a teleport.
+    player.moveToward(ball.position.x);
 
     // Dive: declare a dig attempt. This only resolves into an actual
-    // touch via CollisionResolver if the ball's hitbox is genuinely
-    // overlapping at the moment of contact — tapping doesn't guarantee
-    // a touch, it just puts the player in a position to make one.
+    // touch via CollisionResolver if the ball's (now reach-extended)
+    // hitbox genuinely overlaps at the moment of contact — tapping
+    // doesn't guarantee a touch, it just commits the player to trying.
     player.beginDig();
   }
 
   void _handleJumpOrSpike() {
     final player = _nextEligibleHumanPlayer();
     if (player == null) return;
+    if (player.currentAction != ActionState.idle) return; // one clean attempt per press, no stacking
 
     // Small cosmetic hop so "jump" reads as a visible action even before
     // real jump-arc physics exist — purely visual, doesn't affect timing.
+    // Duration matches the spike action's own "good" timing window so the
+    // hop's peak roughly lines up with when contact is expected to land.
     player.add(
       MoveByEffect(
         Vector2(0, -18),
-        EffectController(duration: 0.12, reverseDuration: 0.12, curve: Curves.easeOut),
+        EffectController(duration: 0.16, reverseDuration: 0.16, curve: Curves.easeOut),
       ),
     );
 

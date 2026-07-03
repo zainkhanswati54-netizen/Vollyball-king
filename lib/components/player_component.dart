@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 
@@ -59,9 +60,31 @@ class PlayerComponent extends PositionComponent
 
   late PlayerHitbox hitbox;
 
+  /// Smooth movement target for tap input — set via `moveToward()`, consumed
+  /// frame-by-frame in `update()` rather than snapping position instantly.
+  /// This is what makes tap-to-move read as a dive/step rather than a
+  /// teleport (see the "Tap Input Tuning" request).
+  double? moveTargetX;
+
   @override
   Future<void> onLoad() async {
-    hitbox = PlayerHitbox(owner: this, size: size);
+    // The COLLISION hitbox is intentionally much taller than the VISIBLE
+    // sprite — it represents jump/reach range, not the character's static
+    // silhouette. Without this, real contact (which only fires on genuine
+    // Flame hitbox overlap, not on intent alone) could only ever happen in
+    // the ~96px band right at floor level, meaning sets and spikes — which
+    // happen well above head height — could never physically register.
+    // This single change is what makes both human dig/set/spike attempts
+    // AND AI interception actually work for balls in flight, not just
+    // balls that have nearly landed.
+    const reachPadding = 20.0; // extra width on each side, for dive forgiveness
+    const reachHeight = 240.0; // extends detection well above head height
+
+    hitbox = PlayerHitbox(
+      owner: this,
+      position: Vector2(-reachPadding, -reachHeight),
+      size: Vector2(size.x + reachPadding * 2, size.y + reachHeight),
+    );
     await add(hitbox);
 
     // Default facing: toward the net, so both teams start the rally
@@ -71,6 +94,25 @@ class PlayerComponent extends PositionComponent
 
     // Apply Active Synergy Traits once the full team is assembled.
     // (Team is passed in via buildTeam below, then resolved together.)
+  }
+
+  /// Set a horizontal target for smooth, multi-frame movement — used by
+  /// human tap input (move toward the ball's shadow) instead of snapping
+  /// position instantly, which read as a teleport rather than a dive.
+  void moveToward(double targetX) {
+    moveTargetX = targetX;
+  }
+
+  void _updateMovement(double dt) {
+    if (moveTargetX == null) return;
+    final dx = moveTargetX! - position.x;
+    if (dx.abs() < 2) {
+      moveTargetX = null;
+      return;
+    }
+    final speed = 170.0 + stats.speed * 22.0; // role Speed stat drives feel
+    final step = dx.sign * min(dx.abs(), speed * dt);
+    position.x += step;
   }
 
   /// Tracks movement direction so the sprite flips to face the way it's
@@ -209,6 +251,7 @@ class PlayerComponent extends PositionComponent
     super.update(dt);
     updateActionTimer(dt);
     updateCharge(dt);
+    _updateMovement(dt);
 
     // Direction tracking for the sprite flip — only update facing when
     // there's meaningful horizontal movement, so standing still (e.g.
