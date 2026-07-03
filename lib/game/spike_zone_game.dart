@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:math';
 import 'dart:ui';
 import 'package:flame/game.dart';
 import 'package:flame/events.dart';
+import 'package:flame/effects.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/animation.dart' show Curves;
 
 import 'game_state.dart';
 import '../components/ball_component.dart';
@@ -11,6 +15,7 @@ import '../ai/ai_controller.dart';
 import '../juice/juice_effects.dart';
 import '../camera/camera_config.dart';
 import '../persistence/persistence_service.dart';
+import '../ui/hud_data.dart';
 
 /// -----------------------------------------------------------------------
 /// MAIN GAME CLASS  (answers request #2)
@@ -50,6 +55,11 @@ class SpikeZoneGame extends FlameGame
   late AIController aiController;
   late JuiceEffects juice;
 
+  /// HUD state — a plain ValueNotifier so the Flutter overlay (HudOverlay)
+  /// can rebuild only when something actually changes, without SpikeZoneGame
+  /// needing to know Flutter widgets exist. Updated via `_syncHud()`.
+  final ValueNotifier<HudData> hud = ValueNotifier(HudData.initial);
+
   double _phaseTimer = 0;
 
   @override
@@ -80,6 +90,89 @@ class SpikeZoneGame extends FlameGame
     juice = JuiceEffects(game: this);
 
     _enterPhase(MatchPhase.serving);
+  }
+
+  // -----------------------------------------------------------------
+  // HUMAN INPUT  (answers the Player Controls request)
+  // -----------------------------------------------------------------
+  /// Two-zone touch control, the classic mobile-arcade-sports scheme:
+  ///   - LEFT half of the screen  -> move-toward-the-ball / dive (defense)
+  ///   - RIGHT half of the screen -> jump / spike (offense)
+  /// During the Serving phase, either side just launches the serve —
+  /// there's no meaningful "zone" distinction before the ball is live.
+  ///
+  /// We use `event.canvasPosition` (raw render-surface pixels, i.e. the
+  /// actual GameWidget size) rather than converting through the camera,
+  /// because "which half of the physical screen did they tap" should stay
+  /// correct regardless of how FixedResolutionViewport is internally
+  /// scaling/letterboxing the 1280x720 design canvas underneath it.
+  @override
+  void onTapDown(TapDownEvent event) {
+    super.onTapDown(event);
+
+    if (phase == MatchPhase.serving) {
+      _launchServeFromTap();
+      return;
+    }
+    if (phase != MatchPhase.rallying && phase != MatchPhase.awakening) return;
+
+    final isLeftZone = event.canvasPosition.x < size.x / 2;
+    if (isLeftZone) {
+      _handleMoveOrDive();
+    } else {
+      _handleJumpOrSpike();
+    }
+  }
+
+  void _launchServeFromTap() {
+    final dir = Vector2(serving == TeamSide.home ? 1 : -1, -1.1);
+    ball.launchServe(dir, 640);
+    _enterPhase(MatchPhase.rallying);
+  }
+
+  /// Picks which home player the human is currently "holding the button
+  /// for" — whoever's closest to the ball and legally eligible to touch
+  /// it next (mirrors the same eligibility rule AIController uses for the
+  /// away team, so both sides play by identical rules).
+  PlayerComponent? _nextEligibleHumanPlayer() {
+    final candidates = homeTeam.where((p) => p.playerId != ball.lastToucherId).toList();
+    if (candidates.isEmpty) return null;
+    candidates.sort(
+      (a, b) => (a.position.x - ball.position.x).abs().compareTo((b.position.x - ball.position.x).abs()),
+    );
+    return candidates.first;
+  }
+
+  void _handleMoveOrDive() {
+    final player = _nextEligibleHumanPlayer();
+    if (player == null) return;
+
+    // Move: step toward the ball's current horizontal position.
+    final dx = ball.position.x - player.position.x;
+    final step = dx.sign * min(dx.abs(), 90.0);
+    player.position.x += step;
+
+    // Dive: declare a dig attempt. This only resolves into an actual
+    // touch via CollisionResolver if the ball's hitbox is genuinely
+    // overlapping at the moment of contact — tapping doesn't guarantee
+    // a touch, it just puts the player in a position to make one.
+    player.beginDig();
+  }
+
+  void _handleJumpOrSpike() {
+    final player = _nextEligibleHumanPlayer();
+    if (player == null) return;
+
+    // Small cosmetic hop so "jump" reads as a visible action even before
+    // real jump-arc physics exist — purely visual, doesn't affect timing.
+    player.add(
+      MoveByEffect(
+        Vector2(0, -18),
+        EffectController(duration: 0.12, reverseDuration: 0.12, curve: Curves.easeOut),
+      ),
+    );
+
+    player.beginAttack();
   }
 
   // -----------------------------------------------------------------
@@ -145,6 +238,7 @@ class SpikeZoneGame extends FlameGame
         persistence.recordMatchResult(score);
         break;
     }
+    _syncHud();
   }
 
   void _updateServing(double dt) {
@@ -203,7 +297,18 @@ class SpikeZoneGame extends FlameGame
     final legal = touch.registerTouch(playerId, side);
     if (!legal) {
       _awardPoint(side == TeamSide.home ? TeamSide.away : TeamSide.home);
+      return;
     }
+    _syncHud();
+  }
+
+  void _syncHud() {
+    hud.value = HudData(
+      homeScore: score.homePoints,
+      awayScore: score.awayPoints,
+      touchCount: touch.touchCount,
+      phase: phase,
+    );
   }
 
   /// Called by an attacking PlayerComponent whose Tension Meter is full.

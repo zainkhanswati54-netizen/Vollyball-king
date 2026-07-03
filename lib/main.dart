@@ -3,6 +3,7 @@ import 'package:flame/game.dart';
 
 import 'persistence/persistence_service.dart';
 import 'game/spike_zone_game.dart';
+import 'ui/hud_overlay.dart';
 
 /// -----------------------------------------------------------------------
 /// APP ENTRY POINT  (answers request #8)
@@ -31,8 +32,12 @@ class SpikeZoneApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
       home: Scaffold(
-        body: GameWidget(
+        body: GameWidget<SpikeZoneGame>(
           game: SpikeZoneGame(persistence: persistence),
+          overlayBuilderMap: {
+            'hud': (context, game) => HudOverlay(game: game),
+          },
+          initialActiveOverlays: const ['hud'],
         ),
       ),
     );
