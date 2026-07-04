@@ -32,8 +32,7 @@ import '../systems/action_state.dart';
 ///  4. `FixedResolutionViewport` (see camera_config.dart) means we never
 ///     recompute layout mid-rally — layout cost is paid once on resize.
 /// -----------------------------------------------------------------------
-class SpikeZoneGame extends FlameGame
-    with HasCollisionDetection, TapCallbacks, DragCallbacks {
+class SpikeZoneGame extends FlameGame with HasCollisionDetection, TapCallbacks {
   SpikeZoneGame({required this.persistence});
 
   final PersistenceService persistence;
@@ -101,14 +100,25 @@ class SpikeZoneGame extends FlameGame
   /// During the Serving phase, either side just launches the serve —
   /// there's no meaningful "zone" distinction before the ball is live.
   ///
-  /// We use `event.canvasPosition` (raw render-surface pixels, i.e. the
-  /// actual GameWidget size) rather than converting through the camera,
-  /// because "which half of the physical screen did they tap" should stay
-  /// correct regardless of how FixedResolutionViewport is internally
-  /// scaling/letterboxing the 1280x720 design canvas underneath it.
+  /// We use `event.localPosition` — for a tap/drag event delivered to the
+  /// GAME itself (as opposed to an individual component), this is the
+  /// position in the game's own render-surface coordinates, i.e. the
+  /// actual GameWidget size. That's what we want for "which half of the
+  /// physical screen did they tap," independent of how
+  /// FixedResolutionViewport is internally scaling/letterboxing the
+  /// 1280x720 design canvas underneath it.
   @override
   void onTapDown(TapDownEvent event) {
     super.onTapDown(event);
+
+    if (kDebugMode) {
+      // Diagnostic only — confirms taps are actually reaching the game at
+      // all, which is the fastest way to tell "input code isn't wired"
+      // apart from "an old build without this code is what's actually
+      // deployed." Check the browser console for this line; if it never
+      // appears, the deployed build predates this handler.
+      debugPrint('[SpikeZoneGame] onTapDown at ${event.localPosition}, phase=$phase');
+    }
 
     if (phase == MatchPhase.serving) {
       _launchServeFromTap();
@@ -116,7 +126,7 @@ class SpikeZoneGame extends FlameGame
     }
     if (phase != MatchPhase.rallying && phase != MatchPhase.awakening) return;
 
-    final isLeftZone = event.canvasPosition.x < size.x / 2;
+    final isLeftZone = event.localPosition.x < size.x / 2;
     if (isLeftZone) {
       _handleMoveOrDive();
     } else {
