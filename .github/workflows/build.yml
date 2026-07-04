@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
 
+# Prevents two workflow runs from deploying to Pages at the same time —
+# if you push twice quickly, the second run waits for the first to finish
+# instead of racing it (which is what produces "Deployment failed, try
+# again later" from actions/deploy-pages).
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   analyze-and-test:
     runs-on: ubuntu-latest
