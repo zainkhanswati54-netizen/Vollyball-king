@@ -237,6 +237,7 @@ class SpikeZoneGame extends FlameGame with HasCollisionDetection, TapCallbacks {
       case MatchPhase.serving:
         touch.reset();
         ball.resetForServe(serving);
+        _pointMessage = null;
         break;
       case MatchPhase.rallying:
         break;
@@ -263,7 +264,10 @@ class SpikeZoneGame extends FlameGame with HasCollisionDetection, TapCallbacks {
 
   void _updateRallying(double dt) {
     if (touch.isFault) {
-      _awardPoint(touch.possessingTeam == TeamSide.home ? TeamSide.away : TeamSide.home);
+      _awardPoint(
+        touch.possessingTeam == TeamSide.home ? TeamSide.away : TeamSide.home,
+        'TOUCH FAULT',
+      );
       return;
     }
     // Tension meter accrual lives on AwakeningTracker inside AIController/
@@ -287,7 +291,11 @@ class SpikeZoneGame extends FlameGame with HasCollisionDetection, TapCallbacks {
       if (score.setIsOver()) {
         _enterPhase(MatchPhase.setPoint);
       } else {
-        serving = touch.possessingTeam ?? serving;
+        // Side-out rule: whoever WON the point serves next — not whoever
+        // last touched the ball, which is very often the team that just
+        // faulted. `_lastPointWinner` is set explicitly in `_awardPoint`
+        // for exactly this reason.
+        serving = _lastPointWinner ?? serving;
         _enterPhase(MatchPhase.serving);
       }
     }
@@ -312,7 +320,7 @@ class SpikeZoneGame extends FlameGame with HasCollisionDetection, TapCallbacks {
     if (phase != MatchPhase.rallying && phase != MatchPhase.awakening) return;
     final legal = touch.registerTouch(playerId, side);
     if (!legal) {
-      _awardPoint(side == TeamSide.home ? TeamSide.away : TeamSide.home);
+      _awardPoint(side == TeamSide.home ? TeamSide.away : TeamSide.home, 'DOUBLE TOUCH');
       return;
     }
     _syncHud();
@@ -324,6 +332,7 @@ class SpikeZoneGame extends FlameGame with HasCollisionDetection, TapCallbacks {
       awayScore: score.awayPoints,
       touchCount: touch.touchCount,
       phase: phase,
+      message: _pointMessage,
     );
   }
 
@@ -334,24 +343,54 @@ class SpikeZoneGame extends FlameGame with HasCollisionDetection, TapCallbacks {
     }
   }
 
-  void _awardPoint(TeamSide winner) {
+  /// The team that won the MOST RECENT point — the correct source of
+  /// truth for serve rotation (side-out), as opposed to `touch.possessingTeam`
+  /// which just reflects whoever physically touched the ball last.
+  TeamSide? _lastPointWinner;
+
+  /// A short reason tag shown on the scoring overlay, e.g. "NET FAULT",
+  /// "OUT OF BOUNDS", "TOUCH FAULT", or "POINT" for a clean kill. Cleared
+  /// the moment the next serve begins.
+  String? _pointMessage;
+
+  void _awardPoint(TeamSide winner, String reason) {
     if (winner == TeamSide.home) {
       score.homePoints++;
     } else {
       score.awayPoints++;
     }
+    _lastPointWinner = winner;
+    final winnerLabel = winner == TeamSide.home ? 'YOU SCORE!' : 'CPU SCORES!';
+    _pointMessage = '$reason — $winnerLabel';
+
     juice.onPointScored(winner);
     _enterPhase(MatchPhase.scoring);
   }
 
+  /// Ball made direct contact with the net during play. Awards the point
+  /// immediately to whichever side did NOT touch it last (matching the
+  /// rule that hitting your own attack/pass into the net is your fault).
+  void netFault(TeamSide lastToucherSide) {
+    _awardPoint(
+      lastToucherSide == TeamSide.home ? TeamSide.away : TeamSide.home,
+      'NET FAULT',
+    );
+  }
+
   void ballLandedOutOfBounds(TeamSide lastToTouch) {
-    _awardPoint(lastToTouch == TeamSide.home ? TeamSide.away : TeamSide.home);
+    _awardPoint(
+      lastToTouch == TeamSide.home ? TeamSide.away : TeamSide.home,
+      'OUT OF BOUNDS',
+    );
   }
 
   void ballLandedInCourt(TeamSide courtOwner) {
     // If the ball lands in a court and that team never got 3 legal
     // touches in, it's already handled via touch.isFault; a clean landing
     // simply means the opposing team failed to return it.
-    _awardPoint(courtOwner == TeamSide.home ? TeamSide.away : TeamSide.home);
+    _awardPoint(
+      courtOwner == TeamSide.home ? TeamSide.away : TeamSide.home,
+      'POINT',
+    );
   }
 }

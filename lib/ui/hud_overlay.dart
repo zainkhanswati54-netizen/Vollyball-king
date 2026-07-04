@@ -24,23 +24,70 @@ class HudOverlay extends StatelessWidget {
     return ValueListenableBuilder<HudData>(
       valueListenable: game.hud,
       builder: (context, data, _) {
-        return SafeArea(
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _ScoreBar(homeScore: data.homeScore, awayScore: data.awayScore, phase: data.phase),
-                  const SizedBox(height: 8),
-                  _TouchLights(touchCount: data.touchCount),
-                ],
+        return Stack(
+          children: [
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _ScoreBar(homeScore: data.homeScore, awayScore: data.awayScore, phase: data.phase),
+                      const SizedBox(height: 8),
+                      _TouchLights(touchCount: data.touchCount),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
+            if (data.message != null)
+              Align(
+                alignment: const Alignment(0, -0.15),
+                child: _PointBanner(key: ValueKey(data.message), message: data.message!),
+              ),
+          ],
         );
       },
+    );
+  }
+}
+
+/// Center-screen banner announcing how the last point was won (or lost) —
+/// e.g. "NET FAULT — YOU SCORE!". Uses its message text as a Key so
+/// Flutter treats each new point as a distinct widget instance, which is
+/// what makes the pop-in animation replay for every new point rather than
+/// only playing once.
+class _PointBanner extends StatelessWidget {
+  const _PointBanner({super.key, required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.6, end: 1.0),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.elasticOut,
+      builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.7),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white24, width: 1),
+        ),
+        child: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ),
     );
   }
 }

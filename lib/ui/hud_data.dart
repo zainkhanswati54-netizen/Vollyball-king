@@ -10,12 +10,18 @@ class HudData {
     required this.awayScore,
     required this.touchCount,
     required this.phase,
+    this.message,
   });
 
   final int homeScore;
   final int awayScore;
   final int touchCount;
   final MatchPhase phase;
+
+  /// Transient reason + outcome text for the most recent point (e.g.
+  /// "NET FAULT — YOU SCORE!"), shown while `phase` is Scoring. Null once
+  /// the next serve begins.
+  final String? message;
 
   static const initial = HudData(
     homeScore: 0,

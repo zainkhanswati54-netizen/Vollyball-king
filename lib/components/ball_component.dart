@@ -50,6 +50,12 @@ class BallComponent extends CircleComponent
 
   bool _inPlay = false;
 
+  /// True the instant ANY scoring event fires for the current rally (net
+  /// fault, out of bounds, landed in court). Prevents a single rally from
+  /// ever awarding two points — e.g. the ball bouncing off the net and
+  /// then later also crossing a boundary or landing shouldn't fire twice.
+  bool _rallyResolved = false;
+
   @override
   Future<void> onLoad() async {
     await super.onLoad();
@@ -144,6 +150,7 @@ class BallComponent extends CircleComponent
 
   void resetForServe(TeamSide server) {
     _inPlay = false;
+    _rallyResolved = false;
     lastToucherId = null;
     lastToucherSide = null;
     final x = server == TeamSide.home ? 120.0 : kDesignWidth - 120.0;
@@ -220,10 +227,21 @@ class BallComponent extends CircleComponent
     if (!_inPlay) return;
 
     if (other == court.netHitbox) {
-      // Net touch: kill horizontal velocity and let it drop — classic
-      // "into the net" fault feel.
-      velocity.x = 0;
-      velocity.y = velocity.y.abs() * 0.2;
+      // Realistic bounce-back: reverse and dampen horizontal velocity
+      // (instead of just zeroing it) so the ball visibly rebounds off the
+      // net rather than sticking to it and dropping straight down. A
+      // small upward pop sells the impact.
+      velocity.x = -velocity.x * 0.4;
+      velocity.y = -velocity.y.abs() * 0.15;
+
+      // Net fault: immediate, regardless of how the ball keeps bouncing
+      // afterward. Guarded by `_rallyResolved` so if the ball goes on to
+      // also cross a boundary or land somewhere after this bounce, that
+      // doesn't fire a second, contradictory scoring event.
+      if (!_rallyResolved && lastToucherSide != null) {
+        _rallyResolved = true;
+        game.netFault(lastToucherSide!);
+      }
     } else if (other is PlayerHitbox) {
       // Real contact — hand off to the collision resolution system, which
       // reads the player's ActionState/timing and the team's touch count
@@ -233,13 +251,19 @@ class BallComponent extends CircleComponent
   }
 
   void _checkOutOfBounds() {
+    if (_rallyResolved) return; // a net fault (or other event) already resolved this rally
+
     if (position.y >= CourtComponent.floorY) {
       final onHomeSide = court.isHomeSide(position.x);
       final side = onHomeSide ? TeamSide.home : TeamSide.away;
+      _rallyResolved = true;
       _inPlay = false;
       game.ballLandedInCourt(side);
     } else if (position.x < 0 || position.x > kDesignWidth) {
+      // Out of bounds past either end of the court — immediate fault for
+      // whichever side touched it last (they're the ones who sent it out).
       final side = lastToucherSide ?? TeamSide.home;
+      _rallyResolved = true;
       _inPlay = false;
       game.ballLandedOutOfBounds(side);
     }
