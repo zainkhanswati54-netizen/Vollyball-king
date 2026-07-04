@@ -39,8 +39,23 @@ class TouchState {
 
   /// Returns false (and should trigger a fault) if the same player tries
   /// to touch twice in a row.
+  ///
+  /// IMPORTANT: each team gets its OWN fresh 1-2-3 sequence. Previously
+  /// this counter just climbed for the whole rally regardless of which
+  /// side was touching, which meant the receiving team's very first touch
+  /// after the ball crossed the net could already read as touch "4" and
+  /// wrongly fault them. Detecting a side change and resetting here is
+  /// what makes `touchCount` actually mean "this team's touch count,"
+  /// matching both the HUD's 1-2-3 lights and the collision resolver's
+  /// Receive/Set/Spike sequencing.
   bool registerTouch(int playerId, TeamSide side) {
     if (playerId == lastToucherId) return false;
+
+    if (side != possessingTeam) {
+      touchCount = 0;
+      lastToucherId = null;
+    }
+
     possessingTeam = side;
     touchCount++;
     lastToucherId = playerId;
